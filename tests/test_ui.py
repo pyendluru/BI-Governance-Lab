@@ -27,3 +27,21 @@ def test_streamlit_app_exposes_expected_pages():
         "render_workspace_explorer",
     ]
     assert streamlit_app.PAGE_TITLE == "BI Governance Lab"
+
+
+def test_dashboard_queries_have_unambiguous_join_paths(session):
+    """Every dashboard query should compile and execute even when its tables are empty."""
+    frame_builders = [
+        streamlit_app._reports_frame,
+        streamlit_app._semantic_models_frame,
+        streamlit_app._data_sources_frame,
+        streamlit_app._users_frame,
+        streamlit_app._workspaces_frame,
+        streamlit_app._refresh_health_frame,
+    ]
+
+    for build_frame in frame_builders:
+        build_frame(session)
+
+    streamlit_app._score_frame(session, "accessibility")
+    streamlit_app._permissions_frame(session, workspace_id=1)

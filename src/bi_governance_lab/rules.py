@@ -173,7 +173,8 @@ def _models_with_high_refresh_failure_rate(session: Session) -> list[RuleResult]
             func.count(RefreshEvent.id),
             func.sum(case((RefreshEvent.status == "failed", 1), else_=0)),
         )
-        .join(RefreshEvent)
+        .select_from(SemanticModel)
+        .join(RefreshEvent, RefreshEvent.semantic_model_id == SemanticModel.id)
         .group_by(SemanticModel.id, SemanticModel.name)
     )
     for model_id, model_name, total_count, failed_count in refresh_rows:
@@ -208,7 +209,8 @@ def _models_not_refreshed_recently(session: Session, as_of: datetime) -> list[Ru
             SemanticModel.name,
             func.max(func.coalesce(RefreshEvent.completed_at, RefreshEvent.started_at)),
         )
-        .outerjoin(RefreshEvent)
+        .select_from(SemanticModel)
+        .outerjoin(RefreshEvent, RefreshEvent.semantic_model_id == SemanticModel.id)
         .group_by(SemanticModel.id, SemanticModel.name)
     )
     for model_id, model_name, latest_refresh in refresh_rows:
@@ -313,7 +315,8 @@ def _reports_missing_descriptions(session: Session) -> list[RuleResult]:
 def _reports_using_uncertified_models(session: Session) -> list[RuleResult]:
     reports = session.scalars(
         select(Report)
-        .join(SemanticModel)
+        .select_from(Report)
+        .join(SemanticModel, Report.semantic_model_id == SemanticModel.id)
         .options(joinedload(Report.semantic_model))
         .where(~SemanticModel.certified)
     ).all()
@@ -342,8 +345,9 @@ def _low_category_scores(
     findings = []
     score_rows = session.execute(
         select(Report.id, Report.name, func.min(GovernanceResult.score))
-        .join(GovernanceResult)
-        .join(GovernanceCheck)
+        .select_from(Report)
+        .join(GovernanceResult, GovernanceResult.report_id == Report.id)
+        .join(GovernanceCheck, GovernanceCheck.id == GovernanceResult.check_id)
         .where(GovernanceCheck.category == category)
         .group_by(Report.id, Report.name)
     )

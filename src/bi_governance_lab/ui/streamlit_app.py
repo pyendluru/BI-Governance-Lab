@@ -274,8 +274,9 @@ def _reports_frame(session: Session) -> pd.DataFrame:
             Workspace.name,
             SemanticModel.name,
         )
-        .join(SemanticModel)
-        .outerjoin(Workspace)
+        .select_from(Report)
+        .join(SemanticModel, Report.semantic_model_id == SemanticModel.id)
+        .outerjoin(Workspace, Report.workspace_id == Workspace.id)
         .order_by(Report.name)
     )
     return pd.DataFrame(
@@ -306,8 +307,9 @@ def _semantic_models_frame(session: Session) -> pd.DataFrame:
             DataSource.name,
             func.count(Report.id),
         )
-        .join(DataSource)
-        .outerjoin(Report)
+        .select_from(SemanticModel)
+        .join(DataSource, SemanticModel.data_source_id == DataSource.id)
+        .outerjoin(Report, Report.semantic_model_id == SemanticModel.id)
         .group_by(SemanticModel.id, SemanticModel.name, DataSource.name)
         .order_by(SemanticModel.name)
     )
@@ -335,7 +337,8 @@ def _data_sources_frame(session: Session) -> pd.DataFrame:
             DataSource.connection_summary,
             func.count(SemanticModel.id),
         )
-        .outerjoin(SemanticModel)
+        .select_from(DataSource)
+        .outerjoin(SemanticModel, SemanticModel.data_source_id == DataSource.id)
         .group_by(DataSource.id, DataSource.name)
         .order_by(DataSource.name)
     )
@@ -356,7 +359,8 @@ def _data_sources_frame(session: Session) -> pd.DataFrame:
 def _users_frame(session: Session) -> pd.DataFrame:
     rows = session.execute(
         select(User.id, User.display_name, User.email, User.role, Workspace.name)
-        .join(Workspace)
+        .select_from(User)
+        .join(Workspace, User.workspace_id == Workspace.id)
         .order_by(User.display_name)
     )
     return pd.DataFrame(
@@ -382,7 +386,8 @@ def _workspaces_frame(session: Session) -> pd.DataFrame:
             Workspace.is_active,
             func.count(Report.id),
         )
-        .outerjoin(Report)
+        .select_from(Workspace)
+        .outerjoin(Report, Report.workspace_id == Workspace.id)
         .group_by(Workspace.id, Workspace.name)
         .order_by(Workspace.name)
     )
@@ -423,8 +428,9 @@ def _findings_frame(session: Session) -> pd.DataFrame:
 def _score_frame(session: Session, category: str) -> pd.DataFrame:
     rows = session.execute(
         select(Report.name, GovernanceCheck.name, GovernanceResult.score, GovernanceResult.passed)
-        .join(GovernanceResult)
-        .join(GovernanceCheck)
+        .select_from(Report)
+        .join(GovernanceResult, GovernanceResult.report_id == Report.id)
+        .join(GovernanceCheck, GovernanceCheck.id == GovernanceResult.check_id)
         .where(GovernanceCheck.category == category)
         .order_by(Report.name)
     )
@@ -444,7 +450,8 @@ def _refresh_health_frame(session: Session) -> pd.DataFrame:
             func.sum(case((RefreshEvent.status == "failed", 1), else_=0)),
             func.max(func.coalesce(RefreshEvent.completed_at, RefreshEvent.started_at)),
         )
-        .join(RefreshEvent)
+        .select_from(SemanticModel)
+        .join(RefreshEvent, RefreshEvent.semantic_model_id == SemanticModel.id)
         .group_by(SemanticModel.id, SemanticModel.name)
         .order_by(SemanticModel.name)
     )
@@ -472,8 +479,9 @@ def _refresh_health_frame(session: Session) -> pd.DataFrame:
 def _permissions_frame(session: Session, workspace_id: int) -> pd.DataFrame:
     rows = session.execute(
         select(User.display_name, Permission.access_level, Report.name)
-        .join(User)
-        .outerjoin(Report)
+        .select_from(Permission)
+        .join(User, Permission.user_id == User.id)
+        .outerjoin(Report, Permission.report_id == Report.id)
         .where(Permission.workspace_id == workspace_id)
         .order_by(Permission.access_level, User.display_name)
     )
